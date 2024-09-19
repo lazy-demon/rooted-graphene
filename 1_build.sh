@@ -149,7 +149,7 @@ pushd kernel/
     curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
     # fetch susfs
-    git clone "https://gitlab.com/chrisaw/susfs4ksu"
+    git clone -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
 
     # apply susfs (to KernelSU)
     pushd KernelSU/
@@ -164,9 +164,9 @@ pushd kernel/
       TARGET_KERNEL_VERSION="5.10"
     fi
 
-    # # apply susfs to kernel
-    # echo "Applying SUSFS for kernel..."
-    # patch -p1 < "susfs4ksu/kernel_patches/${TARGET_KERNEL_VERSION}/50_add_susfs_in_kernel.patch"
+    # apply susfs to kernel
+    echo "Applying SUSFS for kernel..."
+    patch -p1 < "susfs4ksu/kernel_patches/${TARGET_KERNEL_VERSION}/50_add_susfs_in_kernel.patch"
 
     # copy susfs files to kernel (same for all kernels)
     echo "Copying SUSFS files to kernel..."
