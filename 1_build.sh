@@ -175,7 +175,7 @@ pushd kernel/
     cp -v "susfs4ksu/kernel_patches/include/linux/susfs.h" include/linux/
     cp -v "susfs4ksu/kernel_patches/include/linux/sus_su.h" include/linux/
 
-    cp -v "susfs4ksu/kernel_patches/KernelSU/kernel/sucompat.h" ../kernel/
+    cp -v "susfs4ksu/kernel_patches/KernelSU/kernel/sucompat.h" KernelSU/kernel/
 
     # enable wireguard by default
     patch -p1 < "../../patches/0001-Disable-defconfig-check.patch"
