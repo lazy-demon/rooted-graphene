@@ -170,8 +170,8 @@ pushd kernel/
 
     # copy susfs files to kernel (same for all kernels)
     echo "Copying SUSFS files to kernel..."
-    cp -v "susfs4ksu/kernel_patches/SUSFS/fs/susfs.c" fs/
-    cp -v "susfs4ksu/kernel_patches/SUSFS/include/linux/susfs.h" include/linux/
+    cp -v "susfs4ksu/kernel_patches/fs/susfs.c" fs/
+    cp -v "susfs4ksu/kernel_patches/include/linux/susfs.h" include/linux/
 
     # enable wireguard by default
     patch -p1 < "../../patches/0001-Disable-defconfig-check.patch"
