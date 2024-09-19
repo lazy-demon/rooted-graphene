@@ -164,9 +164,9 @@ pushd kernel/
       TARGET_KERNEL_VERSION="5.10"
     fi
 
-    # apply susfs to kernel
-    echo "Applying SUSFS for kernel..."
-    patch -p1 < "susfs4ksu/kernel_patches/${TARGET_KERNEL_VERSION}/50_add_susfs_in_kernel.patch"
+    # # apply susfs to kernel
+    # echo "Applying SUSFS for kernel..."
+    # patch -p1 < "susfs4ksu/kernel_patches/${TARGET_KERNEL_VERSION}/50_add_susfs_in_kernel.patch"
 
     # copy susfs files to kernel (same for all kernels)
     echo "Copying SUSFS files to kernel..."
