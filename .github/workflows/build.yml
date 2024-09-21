@@ -68,6 +68,15 @@ jobs:
         rm -f avbroot.zip
         echo "$HOME/bin" >> $GITHUB_PATH
 
+    - name: Define repo_sync_until_success function
+      run: |
+        function repo_sync_until_success() {
+          until repo sync --force-sync; do
+            echo "repo sync failed, retrying..."
+            sleep 5
+          done
+        }
+
     - name: Fetch latest GrapheneOS device tag
       run: |
         git clone "https://github.com/GrapheneOS/device_google_shusky.git" device_tmp/
@@ -81,6 +90,12 @@ jobs:
 
     - name: Build kernel
       run: |
+        function repo_sync_until_success() {
+          until repo sync --force-sync; do
+            echo "repo sync failed, retrying..."
+            sleep 5
+          done
+        }
         mkdir -p kernel/
         pushd kernel/
         repo init -u https://github.com/GrapheneOS/kernel_manifest-shusky.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
@@ -136,10 +151,4 @@ jobs:
         expect ../../../expect/passphrase-prompts.exp ../../external/avb/avbtool.py extract_public_key --key avb.pem --output avb_pkmd.bin
         ssh-keygen -t ed25519 -f id_ed25519 -N ""
         popd
-        expect ../expect/passphrase-prompts.exp ./script/encrypt_keys.sh ./keys/husky
-        m otatools-package
-        expect ../expect/passphrase-prompts.exp script/release.sh husky
-        popd
-
-    - name: Output results
-      run: ls rom/out/release-*/*ota_update*.zip
+        expect ../expect/passphrase-prompts.exp ./script
