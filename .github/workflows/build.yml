@@ -29,8 +29,7 @@ jobs:
         echo "ROM_TARGET_GROUP=shusky" >> $GITHUB_ENV
 
     - name: Cleanup previous builds
-      run: |
-        rm -rf device_tmp/ kernel/ kernel_out/ rom/
+      run: rm -rf device_tmp/ kernel/ kernel_out/ rom/
 
     - name: Install dependencies
       run: |
@@ -121,21 +120,21 @@ jobs:
         mv -v "kernel/out/shusky/dist" "./kernel_out"
         rm -rf kernel/
 
-   - name: Initialize ROM repo
-  run: |
-    function repo_sync_until_success() {
-      until repo sync --force-sync; do
-        echo "repo sync failed, retrying..."
-        sleep 5
-      done
-    }
-    mkdir -p rom/
-    pushd rom/
-    echo "Initializing ROM repo with the following command:"
-    echo "repo init -u https://github.com/GrapheneOS/platform_manifest.git -b refs/tags/${GRAPHENE_RELEASE} --depth=1 --git-lfs"
-    repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
-    repo_sync_until_success
-    popd
+    - name: Initialize ROM repo
+      run: |
+        function repo_sync_until_success() {
+          until repo sync --force-sync; do
+            echo "repo sync failed, retrying..."
+            sleep 5
+          done
+        }
+        mkdir -p rom/
+        pushd rom/
+        echo "Initializing ROM repo with the following command:"
+        echo "repo init -u https://github.com/GrapheneOS/platform_manifest.git -b refs/tags/${GRAPHENE_RELEASE} --depth=1 --git-lfs"
+        repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
+        repo_sync_until_success
+        popd
 
     - name: Copy kernel output
       run: |
