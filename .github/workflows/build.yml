@@ -121,7 +121,7 @@ jobs:
         mv -v "kernel/out/shusky/dist" "./kernel_out"
         rm -rf kernel/
 
-    - name: Build ROM
+    - name: Initialize ROM repo
       run: |
         function repo_sync_until_success() {
           until repo sync --force-sync; do
@@ -133,16 +133,51 @@ jobs:
         pushd rom/
         repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
         repo_sync_until_success
-        cp -Rfv ../kernel_out/* "device/google/shusky-kernel/"
-        rm -rf ../kernel_out
-        yarnpkg install --cwd vendor/adevtool/
+        popd
+
+    - name: Copy kernel output
+      run: |
+        cp -Rfv kernel_out/* "rom/device/google/shusky-kernel/"
+        rm -rf kernel_out
+
+    - name: Install yarnpkg dependencies
+      run: yarnpkg install --cwd rom/vendor/adevtool/
+
+    - name: Set up build environment
+      run: |
+        pushd rom/
         . build/envsetup.sh
         TARGET_RELEASE=$(find build/release/aconfig/* -type d ! -name 'root' -print -quit | xargs basename)
         export TARGET_RELEASE
+        popd
+
+    - name: Build AAPT2
+      run: |
+        pushd rom/
         m aapt2
+        popd
+
+    - name: Generate all with adevtool
+      run: |
+        pushd rom/
         ./vendor/adevtool/bin/run generate-all -d "husky"
+        popd
+
+    - name: Lunch configuration
+      run: |
+        pushd rom/
         lunch "husky-${TARGET_RELEASE}-user"
+        popd
+
+    - name: Build vendor images
+      run: |
+        pushd rom/
         m vendorbootimage vendorkernelbootimage target-files-package
+        popd
+
+    - name: Create signing keys
+      run: |
+        pushd rom/
         mkdir -p "keys/husky/"
         pushd "keys/husky/"
         CN=GrapheneOS
@@ -157,8 +192,23 @@ jobs:
         expect ../../../expect/passphrase-prompts.exp ../../external/avb/avbtool.py extract_public_key --key avb.pem --output avb_pkmd.bin
         ssh-keygen -t ed25519 -f id_ed25519 -N ""
         popd
+        popd
+
+    - name: Encrypt keys
+      run: |
+        pushd rom/
         expect ../expect/passphrase-prompts.exp ./script/encrypt_keys.sh ./keys/husky
+        popd
+
+    - name: Build OTA tools package
+      run: |
+        pushd rom/
         m otatools-package
+        popd
+
+    - name: Release build
+      run: |
+        pushd rom/
         expect ../expect/passphrase-prompts.exp script/release.sh husky
         popd
 
