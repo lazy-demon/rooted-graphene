@@ -1,30 +1,178 @@
-# This is a basic workflow to help you get started with Actions
+name: Build GrapheneOS
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches:
+      - main
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      # Runs a single command using the runners shell
-      - name: start
-        run: sudo ./1_build.sh husky
+    - name: Set up variables
+      run: |
+        echo "AVBROOT_VERSION=3.4.0" >> $GITHUB_ENV
+        echo "ROM_TARGET=${{ github.event.inputs.device_codename }}" >> $GITHUB_ENV
+
+    - name: Validate input
+      run: |
+        if [ -z "${{ github.event.inputs.device_codename }}" ]; then
+          echo "Device codename is required."
+          exit 1
+        fi
+
+    - name: Sync repository
+      run: git pull
+
+    - name: Determine ROM target code
+      run: |
+        if [[ "${{ env.ROM_TARGET }}" == "shiba" || "${{ env.ROM_TARGET }}" == "husky" ]]; then
+          echo "ROM_TARGET_GROUP=shusky" >> $GITHUB_ENV
+        elif [[ "${{ env.ROM_TARGET }}" == "panther" || "${{ env.ROM_TARGET }}" == "cheetah" ]]; then
+          echo "ROM_TARGET_GROUP=pantah" >> $GITHUB_ENV
+        elif [[ "${{ env.ROM_TARGET }}" == "felix" ]]; then
+          echo "ROM_TARGET_GROUP=${{ env.ROM_TARGET }}" >> $GITHUB_ENV
+        else
+          echo "Unsupported device codename"
+          exit 1
+        fi
+
+    - name: Cleanup previous builds
+      run: |
+        rm -rf device_tmp/ kernel/ kernel_out/ rom/
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt dist-upgrade -y
+        sudo apt install -y bison build-essential curl expect flex git git-lfs jq libncurses-dev libssl-dev openjdk-21-jdk-headless python3 python3-googleapi python3-protobuf rsync ssh unzip yarnpkg zip
+
+    - name: Install repo command
+      run: |
+        sudo curl -s https://storage.googleapis.com/git-repo-downloads/repo > /usr/bin/repo
+        sudo chmod +x /usr/bin/repo
+
+    - name: Install libncurses5
+      run: |
+        curl -O http://launchpadlibrarian.net/648013231/libtinfo5_6.4-2_amd64.deb
+        sudo dpkg -i libtinfo5_6.4-2_amd64.deb
+        curl -LO http://launchpadlibrarian.net/648013227/libncurses5_6.4-2_amd64.deb
+        sudo dpkg -i libncurses5_6.4-2_amd64.deb
+        rm -f ./*.deb
+
+    - name: Configure git
+      run: |
+        git config --global color.ui false
+        git config --global user.email "androidbuild@localhost"
+        git config --global user.name "Android Build"
+
+    - name: Install avbroot
+      run: |
+        curl -LSs "https://github.com/chenxiaolong/avbroot/releases/download/v${{ env.AVBROOT_VERSION }}/avbroot-${{ env.AVBROOT_VERSION }}-x86_64-unknown-linux-gnu.zip" > avbroot.zip
+        unzip -o -p avbroot.zip avbroot > /usr/bin/avbroot
+        sudo chmod +x /usr/bin/avbroot
+        rm -f avbroot.zip
+
+    - name: Fetch latest GrapheneOS device tag
+      run: |
+        git clone "https://github.com/GrapheneOS/device_google_${{ env.ROM_TARGET_GROUP }}.git" device_tmp/
+        pushd device_tmp
+        GRAPHENE_RELEASE=$(git describe --tags --abbrev=0)
+        GRAPHENE_RELEASE="${GRAPHENE_RELEASE%%-*}"
+        echo "GRAPHENE_RELEASE=${GRAPHENE_RELEASE}" >> $GITHUB_ENV
+        echo "Building GrapheneOS release: ${GRAPHENE_RELEASE}"
+        popd
+        rm -rf device_tmp/
+
+    - name: Build kernel
+      run: |
+        mkdir -p kernel/
+        pushd kernel/
+        if [[ "${{ env.ROM_TARGET }}" == "husky" || "${{ env.ROM_TARGET }}" == "shiba" ]]; then
+          repo init -u https://github.com/GrapheneOS/kernel_manifest-shusky.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
+        else
+          repo init -u https://github.com/GrapheneOS/kernel_manifest-gs.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
+        fi
+        repo_sync_until_success
+        pushd aosp/
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+        git clone -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
+        pushd KernelSU/
+        patch -p1 < "../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
+        popd
+
+        if [[ "${{ env.ROM_TARGET }}" == "husky" || "${{ env.ROM_TARGET }}" == "shiba" ]]; then
+          TARGET_KERNEL_VERSION="5.15"
+        else
+          TARGET_KERNEL_VERSION="5.10"
+        fi
+
+        patch -p1 < "susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch"
+        cp -v "susfs4ksu/kernel_patches/fs/susfs.c" fs/
+        cp -v "susfs4ksu/kernel_patches/fs/sus_su.c" fs/
+        cp -v "susfs4ksu/kernel_patches/include/linux/susfs.h" include/linux/
+        cp -v "susfs4ksu/kernel_patches/include/linux/sus_su.h" include/linux/
+        cp -v "susfs4ksu/kernel_patches/KernelSU/kernel/sucompat.h" KernelSU/kernel/
+        patch -p1 < "../../patches/0001-Disable-defconfig-check.patch"
+        patch -p1 < "../../patches/0002-Enable-wireguard-by-default.patch"
+        popd
+
+        if [[ "${{ env.ROM_TARGET_GROUP }}" == "pantah" ]]; then
+          BUILD_AOSP_KERNEL=1 LTO=full ./build_cloudripper.sh
+        else
+          BUILD_AOSP_KERNEL=1 LTO=full ./build_${{ env.ROM_TARGET_GROUP }}.sh
+        fi
+        popd
+
+        if [[ "${{ env.ROM_TARGET }}" == "husky" || "${{ env.ROM_TARGET }}" == "shiba" ]]; then
+          mv -v "kernel/out/shusky/dist" "./kernel_out"
+        else
+          mv -v "kernel/out/mixed/dist" "./kernel_out"
+        fi
+        rm -rf kernel/
+
+    - name: Build ROM
+      run: |
+        mkdir -p rom/
+        pushd rom/
+        repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
+        repo_sync_until_success
+        cp -Rfv ../kernel_out/* "device/google/${{ env.ROM_TARGET_GROUP }}-kernel/"
+        rm -rf ../kernel_out
+        yarnpkg install --cwd vendor/adevtool/
+        . build/envsetup.sh
+        TARGET_RELEASE=$(find build/release/aconfig/* -type d ! -name 'root' -print -quit | xargs basename)
+        export TARGET_RELEASE
+        m aapt2
+        ./vendor/adevtool/bin/run generate-all -d "${{ env.ROM_TARGET }}"
+        lunch "${{ env.ROM_TARGET }}-${TARGET_RELEASE}-user"
+        m vendorbootimage vendorkernelbootimage target-files-package
+        mkdir -p "keys/${{ env.ROM_TARGET }}/"
+        pushd "keys/${{ env.ROM_TARGET }}/"
+        CN=GrapheneOS
+        printf "\n" | ../../development/tools/make_key releasekey "/CN=$CN/" || true
+        printf "\n" | ../../development/tools/make_key platform "/CN=$CN/" || true
+        printf "\n" | ../../development/tools/make_key shared "/CN=$CN/" || true
+        printf "\n" | ../../development/tools/make_key media "/CN=$CN/" || true
+        printf "\n" | ../../development/tools/make_key networkstack "/CN=$CN/" || true
+        printf "\n" | ../../development/tools/make_key sdk_sandbox "/CN=$CN/" || true
+        printf "\n" | ../../development/tools/make_key bluetooth "/CN=$CN/" || true
+        openssl genrsa 4096 | openssl pkcs8 -topk8 -scrypt -out avb.pem -passout pass:""
+        expect ../../../expect/passphrase-prompts.exp ../../external/avb/avbtool.py extract_public_key --key avb.pem --output avb_pkmd.bin
+        ssh-keygen -t ed25519 -f id_ed25519 -N ""
+        popd
+        expect ../expect/passphrase-prompts.exp ./script/encrypt_keys.sh ./keys/${{ env.ROM_TARGET }}
+        m otatools-package
+        expect ../expect/passphrase-prompts.exp script/release.sh ${ROM_TARGET}
+        popd
+
+    - name: Output results
+      run: ls rom/out/release-*/*ota_update*.zip
