@@ -61,10 +61,12 @@ jobs:
 
     - name: Install avbroot
       run: |
+        mkdir -p ~/bin
         curl -LSs "https://github.com/chenxiaolong/avbroot/releases/download/v${{ env.AVBROOT_VERSION }}/avbroot-${{ env.AVBROOT_VERSION }}-x86_64-unknown-linux-gnu.zip" > avbroot.zip
-        unzip -o -p avbroot.zip avbroot > /usr/bin/avbroot
-        sudo chmod +x /usr/bin/avbroot
+        unzip -o -p avbroot.zip avbroot > ~/bin/avbroot
+        chmod +x ~/bin/avbroot
         rm -f avbroot.zip
+        echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Fetch latest GrapheneOS device tag
       run: |
