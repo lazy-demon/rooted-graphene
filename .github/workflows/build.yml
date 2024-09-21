@@ -18,25 +18,15 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Set up variables
-      run: |
-        echo "AVBROOT_VERSION=3.4.0" >> $GITHUB_ENV
-        echo "ROM_TARGET=husky" >> $GITHUB_ENV
+      run: echo "AVBROOT_VERSION=3.4.0" >> $GITHUB_ENV
 
     - name: Sync repository
       run: git pull
 
     - name: Determine ROM target code
       run: |
-        if [[ "${{ env.ROM_TARGET }}" == "shiba" || "${{ env.ROM_TARGET }}" == "husky" ]]; then
-          echo "ROM_TARGET_GROUP=shusky" >> $GITHUB_ENV
-        elif [[ "${{ env.ROM_TARGET }}" == "panther" || "${{ env.ROM_TARGET }}" == "cheetah" ]]; then
-          echo "ROM_TARGET_GROUP=pantah" >> $GITHUB_ENV
-        elif [[ "${{ env.ROM_TARGET }}" == "felix" ]]; then
-          echo "ROM_TARGET_GROUP=${{ env.ROM_TARGET }}" >> $GITHUB_ENV
-        else
-          echo "Unsupported device codename"
-          exit 1
-        fi
+        ROM_TARGET="husky"
+        echo "ROM_TARGET_GROUP=shusky" >> $GITHUB_ENV
 
     - name: Cleanup previous builds
       run: |
@@ -48,10 +38,12 @@ jobs:
         sudo apt dist-upgrade -y
         sudo apt install -y bison build-essential curl expect flex git git-lfs jq libncurses-dev libssl-dev openjdk-21-jdk-headless python3 python3-googleapi python3-protobuf rsync ssh unzip yarnpkg zip
 
-    - name: Install repo command
+    - name: Install repo command locally
       run: |
-        sudo curl -s https://storage.googleapis.com/git-repo-downloads/repo > /usr/bin/repo
-        sudo chmod +x /usr/bin/repo
+        mkdir -p ~/bin
+        curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod +x ~/bin/repo
+        echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Install libncurses5
       run: |
@@ -76,7 +68,7 @@ jobs:
 
     - name: Fetch latest GrapheneOS device tag
       run: |
-        git clone "https://github.com/GrapheneOS/device_google_${{ env.ROM_TARGET_GROUP }}.git" device_tmp/
+        git clone "https://github.com/GrapheneOS/device_google_shusky.git" device_tmp/
         pushd device_tmp
         GRAPHENE_RELEASE=$(git describe --tags --abbrev=0)
         GRAPHENE_RELEASE="${GRAPHENE_RELEASE%%-*}"
@@ -89,11 +81,7 @@ jobs:
       run: |
         mkdir -p kernel/
         pushd kernel/
-        if [[ "${{ env.ROM_TARGET }}" == "husky" || "${{ env.ROM_TARGET }}" == "shiba" ]]; then
-          repo init -u https://github.com/GrapheneOS/kernel_manifest-shusky.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
-        else
-          repo init -u https://github.com/GrapheneOS/kernel_manifest-gs.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
-        fi
+        repo init -u https://github.com/GrapheneOS/kernel_manifest-shusky.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
         repo_sync_until_success
         pushd aosp/
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
@@ -101,13 +89,7 @@ jobs:
         pushd KernelSU/
         patch -p1 < "../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
         popd
-
-        if [[ "${{ env.ROM_TARGET }}" == "husky" || "${{ env.ROM_TARGET }}" == "shiba" ]]; then
-          TARGET_KERNEL_VERSION="5.15"
-        else
-          TARGET_KERNEL_VERSION="5.10"
-        fi
-
+        TARGET_KERNEL_VERSION="5.15"
         patch -p1 < "susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch"
         cp -v "susfs4ksu/kernel_patches/fs/susfs.c" fs/
         cp -v "susfs4ksu/kernel_patches/fs/sus_su.c" fs/
@@ -117,19 +99,9 @@ jobs:
         patch -p1 < "../../patches/0001-Disable-defconfig-check.patch"
         patch -p1 < "../../patches/0002-Enable-wireguard-by-default.patch"
         popd
-
-        if [[ "${{ env.ROM_TARGET_GROUP }}" == "pantah" ]]; then
-          BUILD_AOSP_KERNEL=1 LTO=full ./build_cloudripper.sh
-        else
-          BUILD_AOSP_KERNEL=1 LTO=full ./build_${{ env.ROM_TARGET_GROUP }}.sh
-        fi
+        BUILD_AOSP_KERNEL=1 LTO=full ./build_shusky.sh
         popd
-
-        if [[ "${{ env.ROM_TARGET }}" == "husky" || "${{ env.ROM_TARGET }}" == "shiba" ]]; then
-          mv -v "kernel/out/shusky/dist" "./kernel_out"
-        else
-          mv -v "kernel/out/mixed/dist" "./kernel_out"
-        fi
+        mv -v "kernel/out/shusky/dist" "./kernel_out"
         rm -rf kernel/
 
     - name: Build ROM
@@ -138,18 +110,18 @@ jobs:
         pushd rom/
         repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
         repo_sync_until_success
-        cp -Rfv ../kernel_out/* "device/google/${{ env.ROM_TARGET_GROUP }}-kernel/"
+        cp -Rfv ../kernel_out/* "device/google/shusky-kernel/"
         rm -rf ../kernel_out
         yarnpkg install --cwd vendor/adevtool/
         . build/envsetup.sh
         TARGET_RELEASE=$(find build/release/aconfig/* -type d ! -name 'root' -print -quit | xargs basename)
         export TARGET_RELEASE
         m aapt2
-        ./vendor/adevtool/bin/run generate-all -d "${{ env.ROM_TARGET }}"
-        lunch "${{ env.ROM_TARGET }}-${TARGET_RELEASE}-user"
+        ./vendor/adevtool/bin/run generate-all -d "husky"
+        lunch "husky-${TARGET_RELEASE}-user"
         m vendorbootimage vendorkernelbootimage target-files-package
-        mkdir -p "keys/${{ env.ROM_TARGET }}/"
-        pushd "keys/${{ env.ROM_TARGET }}/"
+        mkdir -p "keys/husky/"
+        pushd "keys/husky/"
         CN=GrapheneOS
         printf "\n" | ../../development/tools/make_key releasekey "/CN=$CN/" || true
         printf "\n" | ../../development/tools/make_key platform "/CN=$CN/" || true
@@ -162,9 +134,9 @@ jobs:
         expect ../../../expect/passphrase-prompts.exp ../../external/avb/avbtool.py extract_public_key --key avb.pem --output avb_pkmd.bin
         ssh-keygen -t ed25519 -f id_ed25519 -N ""
         popd
-        expect ../expect/passphrase-prompts.exp ./script/encrypt_keys.sh ./keys/${{ env.ROM_TARGET }}
+        expect ../expect/passphrase-prompts.exp ./script/encrypt_keys.sh ./keys/husky
         m otatools-package
-        expect ../expect/passphrase-prompts.exp script/release.sh ${ROM_TARGET}
+        expect ../expect/passphrase-prompts.exp script/release.sh husky
         popd
 
     - name: Output results
