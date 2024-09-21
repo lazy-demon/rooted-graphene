@@ -20,7 +20,7 @@ jobs:
     - name: Set up variables
       run: |
         echo "AVBROOT_VERSION=3.4.0" >> $GITHUB_ENV
-        echo "ROM_TARGET=${{ github.event.inputs.device_codename }}" >> $GITHUB_ENV
+        echo "ROM_TARGET=husky
 
     - name: Validate input
       run: |
