@@ -22,13 +22,6 @@ jobs:
         echo "AVBROOT_VERSION=3.4.0" >> $GITHUB_ENV
         echo "ROM_TARGET=husky" >> $GITHUB_ENV
 
-    - name: Validate input
-      run: |
-        if [ -z "${{ github.event.inputs.device_codename }}" ]; then
-          echo "Device codename is required."
-          exit 1
-        fi
-
     - name: Sync repository
       run: git pull
 
