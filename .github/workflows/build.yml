@@ -14,209 +14,209 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up variables
-      run: echo "AVBROOT_VERSION=3.4.0" >> $GITHUB_ENV
+      - name: Set up variables
+        run: echo "AVBROOT_VERSION=3.4.0" >> $GITHUB_ENV
 
-    - name: Sync repository
-      run: git pull
+      - name: Sync repository
+        run: git pull
 
-    - name: Determine ROM target code
-      run: |
-        ROM_TARGET="husky"
-        echo "ROM_TARGET_GROUP=shusky" >> $GITHUB_ENV
+      - name: Determine ROM target code
+        run: |
+          ROM_TARGET="husky"
+          echo "ROM_TARGET_GROUP=shusky" >> $GITHUB_ENV
 
-    - name: Cleanup previous builds
-      run: rm -rf device_tmp/ kernel/ kernel_out/ rom/
+      - name: Cleanup previous builds
+        run: rm -rf device_tmp/ kernel/ kernel_out/ rom/
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt dist-upgrade -y
-        sudo apt install -y bison build-essential curl expect flex git git-lfs jq libncurses-dev libssl-dev openjdk-21-jdk-headless python3 python3-googleapi python3-protobuf rsync ssh unzip yarnpkg zip
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt dist-upgrade -y
+          sudo apt install -y bison build-essential curl expect flex git git-lfs jq libncurses-dev libssl-dev openjdk-21-jdk-headless python3 python3-googleapi python3-protobuf rsync ssh unzip yarnpkg z[...]
 
-    - name: Install repo command locally
-      run: |
-        mkdir -p ~/bin
-        curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod +x ~/bin/repo
-        echo "$HOME/bin" >> $GITHUB_PATH
+      - name: Install repo command locally
+        run: |
+          mkdir -p ~/bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod +x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
 
-    - name: Install libncurses5
-      run: |
-        curl -O http://launchpadlibrarian.net/648013231/libtinfo5_6.4-2_amd64.deb
-        sudo dpkg -i libtinfo5_6.4-2_amd64.deb
-        curl -LO http://launchpadlibrarian.net/648013227/libncurses5_6.4-2_amd64.deb
-        sudo dpkg -i libncurses5_6.4-2_amd64.deb
-        rm -f ./*.deb
+      - name: Install libncurses5
+        run: |
+          curl -O http://launchpadlibrarian.net/648013231/libtinfo5_6.4-2_amd64.deb
+          sudo dpkg -i libtinfo5_6.4-2_amd64.deb
+          curl -LO http://launchpadlibrarian.net/648013227/libncurses5_6.4-2_amd64.deb
+          sudo dpkg -i libncurses5_6.4-2_amd64.deb
+          rm -f ./*.deb
 
-    - name: Configure git
-      run: |
-        git config --global color.ui false
-        git config --global user.email "androidbuild@localhost"
-        git config --global user.name "Android Build"
+      - name: Configure git
+        run: |
+          git config --global color.ui false
+          git config --global user.email "androidbuild@localhost"
+          git config --global user.name "Android Build"
 
-    - name: Install avbroot
-      run: |
-        mkdir -p ~/bin
-        curl -LSs "https://github.com/chenxiaolong/avbroot/releases/download/v${{ env.AVBROOT_VERSION }}/avbroot-${{ env.AVBROOT_VERSION }}-x86_64-unknown-linux-gnu.zip" > avbroot.zip
-        unzip -o -p avbroot.zip avbroot > ~/bin/avbroot
-        chmod +x ~/bin/avbroot
-        rm -f avbroot.zip
-        echo "$HOME/bin" >> $GITHUB_PATH
+      - name: Install avbroot
+        run: |
+          mkdir -p ~/bin
+          curl -LSs "https://github.com/chenxiaolong/avbroot/releases/download/v${{ env.AVBROOT_VERSION }}/avbroot-${{ env.AVBROOT_VERSION }}-x86_64-unknown-linux-gnu.zip" > avbroot.zip
+          unzip -o -p avbroot.zip avbroot > ~/bin/avbroot
+          chmod +x ~/bin/avbroot
+          rm -f avbroot.zip
+          echo "$HOME/bin" >> $GITHUB_PATH
 
-    - name: Define repo_sync_until_success function
-      run: |
-        function repo_sync_until_success() {
-          until repo sync --force-sync; do
-            echo "repo sync failed, retrying..."
-            sleep 5
-          done
-        }
+      - name: Define repo_sync_until_success function
+        run: |
+          function repo_sync_until_success() {
+            until repo sync --force-sync; do
+              echo "repo sync failed, retrying..."
+              sleep 5
+            done
+          }
 
-    - name: Fetch latest GrapheneOS device tag
-      run: |
-        git clone "https://github.com/GrapheneOS/device_google_shusky.git" device_tmp/
-        pushd device_tmp
-        GRAPHENE_RELEASE=$(git describe --tags --abbrev=0)
-        GRAPHENE_RELEASE="${GRAPHENE_RELEASE%%-*}"
-        echo "GRAPHENE_RELEASE=${GRAPHENE_RELEASE}" >> $GITHUB_ENV
-        echo "Building GrapheneOS release: ${GRAPHENE_RELEASE}"
-        popd
-        rm -rf device_tmp/
+      - name: Fetch latest GrapheneOS device tag
+        run: |
+          git clone "https://github.com/GrapheneOS/device_google_shusky.git" device_tmp/
+          pushd device_tmp
+          GRAPHENE_RELEASE=$(git describe --tags --abbrev=0)
+          GRAPHENE_RELEASE="${GRAPHENE_RELEASE%%-*}"
+          echo "GRAPHENE_RELEASE=${GRAPHENE_RELEASE}" >> $GITHUB_ENV
+          echo "Building GrapheneOS release: ${GRAPHENE_RELEASE}"
+          popd
+          rm -rf device_tmp/
 
-    - name: Build kernel
-      run: |
-        function repo_sync_until_success() {
-          until repo sync --force-sync; do
-            echo "repo sync failed, retrying..."
-            sleep 5
-          done
-        }
-        mkdir -p kernel/
-        pushd kernel/
-        repo init -u https://github.com/GrapheneOS/kernel_manifest-shusky.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
-        repo_sync_until_success
-        pushd aosp/
-        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-        git clone -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
-        pushd KernelSU/
-        patch -p1 < "../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
-        popd
-        TARGET_KERNEL_VERSION="5.15"
-        patch -p1 < "susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch"
-        cp -v "susfs4ksu/kernel_patches/fs/susfs.c" fs/
-        cp -v "susfs4ksu/kernel_patches/fs/sus_su.c" fs/
-        cp -v "susfs4ksu/kernel_patches/include/linux/susfs.h" include/linux/
-        cp -v "susfs4ksu/kernel_patches/include/linux/sus_su.h" include/linux/
-        cp -v "susfs4ksu/kernel_patches/KernelSU/kernel/sucompat.h" KernelSU/kernel/
-        patch -p1 < "../../patches/0001-Disable-defconfig-check.patch"
-        patch -p1 < "../../patches/0002-Enable-wireguard-by-default.patch"
-        popd
-        BUILD_AOSP_KERNEL=1 LTO=full ./build_shusky.sh
-        popd
-        mv -v "kernel/out/shusky/dist" "./kernel_out"
-        rm -rf kernel/
+      - name: Build kernel
+        run: |
+          function repo_sync_until_success() {
+            until repo sync --force-sync; do
+              echo "repo sync failed, retrying..."
+              sleep 5
+            done
+          }
+          mkdir -p kernel/
+          pushd kernel/
+          repo init -u https://github.com/GrapheneOS/kernel_manifest-shusky.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
+          repo_sync_until_success
+          pushd aosp/
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+          git clone -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
+          pushd KernelSU/
+          patch -p1 < "../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
+          popd
+          TARGET_KERNEL_VERSION="5.15"
+          patch -p1 < "susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch"
+          cp -v "susfs4ksu/kernel_patches/fs/susfs.c" fs/
+          cp -v "susfs4ksu/kernel_patches/fs/sus_su.c" fs/
+          cp -v "susfs4ksu/kernel_patches/include/linux/susfs.h" include/linux/
+          cp -v "susfs4ksu/kernel_patches/include/linux/sus_su.h" include/linux/
+          cp -v "susfs4ksu/kernel_patches/KernelSU/kernel/sucompat.h" KernelSU/kernel/
+          patch -p1 < "../../patches/0001-Disable-defconfig-check.patch"
+          patch -p1 < "../../patches/0002-Enable-wireguard-by-default.patch"
+          popd
+          BUILD_AOSP_KERNEL=1 LTO=full ./build_shusky.sh
+          popd
+          mv -v "kernel/out/shusky/dist" "./kernel_out"
+          rm -rf kernel/
 
-- name: Initialize ROM repo
-  run: |
-    echo "GRAPHENE_RELEASE=${GRAPHENE_RELEASE}"
-    function repo_sync_until_success() {
-      until repo sync --force-sync; do
-        echo "repo sync failed, retrying..."
-        sleep 5
-      done
-    }
-    mkdir -p rom/
-    pushd rom/
-    echo "Initializing ROM repo with the following command:"
-    echo "repo init -u https://github.com/GrapheneOS/platform_manifest.git -b refs/tags/${GRAPHENE_RELEASE} --depth=1 --git-lfs"
-    repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
-    if [ $? -ne 0 ]; then
-      echo "Error initializing repo"
-      exit 1
-    fi
-    repo_sync_until_success
-    popd
+      - name: Initialize ROM repo
+        run: |
+          echo "GRAPHENE_RELEASE=${GRAPHENE_RELEASE}"
+          function repo_sync_until_success() {
+            until repo sync --force-sync; do
+              echo "repo sync failed, retrying..."
+              sleep 5
+            done
+          }
+          mkdir -p rom/
+          pushd rom/
+          echo "Initializing ROM repo with the following command:"
+          echo "repo init -u https://github.com/GrapheneOS/platform_manifest.git -b refs/tags/${GRAPHENE_RELEASE} --depth=1 --git-lfs"
+          repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/${GRAPHENE_RELEASE}" --depth=1 --git-lfs
+          if [ $? -ne 0 ]; then
+            echo "Error initializing repo"
+            exit 1
+          fi
+          repo_sync_until_success
+          popd
 
-    - name: Copy kernel output
-      run: |
-        cp -Rfv kernel_out/* "rom/device/google/shusky-kernel/"
-        rm -rf kernel_out
+      - name: Copy kernel output
+        run: |
+          cp -Rfv kernel_out/* "rom/device/google/shusky-kernel/"
+          rm -rf kernel_out
 
-    - name: Install yarnpkg dependencies
-      run: yarnpkg install --cwd rom/vendor/adevtool/
+      - name: Install yarnpkg dependencies
+        run: yarnpkg install --cwd rom/vendor/adevtool/
 
-    - name: Set up build environment
-      run: |
-        pushd rom/
-        . build/envsetup.sh
-        TARGET_RELEASE=$(find build/release/aconfig/* -type d ! -name 'root' -print -quit | xargs basename)
-        export TARGET_RELEASE
-        popd
+      - name: Set up build environment
+        run: |
+          pushd rom/
+          . build/envsetup.sh
+          TARGET_RELEASE=$(find build/release/aconfig/* -type d ! -name 'root' -print -quit | xargs basename)
+          export TARGET_RELEASE
+          popd
 
-    - name: Build AAPT2
-      run: |
-        pushd rom/
-        m aapt2
-        popd
+      - name: Build AAPT2
+        run: |
+          pushd rom/
+          m aapt2
+          popd
 
-    - name: Generate all with adevtool
-      run: |
-        pushd rom/
-        ./vendor/adevtool/bin/run generate-all -d "husky"
-        popd
+      - name: Generate all with adevtool
+        run: |
+          pushd rom/
+          ./vendor/adevtool/bin/run generate-all -d "husky"
+          popd
 
-    - name: Lunch configuration
-      run: |
-        pushd rom/
-        lunch "husky-${TARGET_RELEASE}-user"
-        popd
+      - name: Lunch configuration
+        run: |
+          pushd rom/
+          lunch "husky-${TARGET_RELEASE}-user"
+          popd
 
-    - name: Build vendor images
-      run: |
-        pushd rom/
-        m vendorbootimage vendorkernelbootimage target-files-package
-        popd
+      - name: Build vendor images
+        run: |
+          pushd rom/
+          m vendorbootimage vendorkernelbootimage target-files-package
+          popd
 
-    - name: Create signing keys
-      run: |
-        pushd rom/
-        mkdir -p "keys/husky/"
-        pushd "keys/husky/"
-        CN=GrapheneOS
-        printf "\n" | ../../development/tools/make_key releasekey "/CN=$CN/" || true
-        printf "\n" | ../../development/tools/make_key platform "/CN=$CN/" || true
-        printf "\n" | ../../development/tools/make_key shared "/CN=$CN/" || true
-        printf "\n" | ../../development/tools/make_key media "/CN=$CN/" || true
-        printf "\n" | ../../development/tools/make_key networkstack "/CN=$CN/" || true
-        printf "\n" | ../../development/tools/make_key sdk_sandbox "/CN=$CN/" || true
-        printf "\n" | ../../development/tools/make_key bluetooth "/CN=$CN/" || true
-        openssl genrsa 4096 | openssl pkcs8 -topk8 -scrypt -out avb.pem -passout pass:""
-        expect ../../../expect/passphrase-prompts.exp ../../external/avb/avbtool.py extract_public_key --key avb.pem --output avb_pkmd.bin
-        ssh-keygen -t ed25519 -f id_ed25519 -N ""
-        popd
-        popd
+      - name: Create signing keys
+        run: |
+          pushd rom/
+          mkdir -p "keys/husky/"
+          pushd "keys/husky/"
+          CN=GrapheneOS
+          printf "\n" | ../../development/tools/make_key releasekey "/CN=$CN/" || true
+          printf "\n" | ../../development/tools/make_key platform "/CN=$CN/" || true
+          printf "\n" | ../../development/tools/make_key shared "/CN=$CN/" || true
+          printf "\n" | ../../development/tools/make_key media "/CN=$CN/" || true
+          printf "\n" | ../../development/tools/make_key networkstack "/CN=$CN/" || true
+          printf "\n" | ../../development/tools/make_key sdk_sandbox "/CN=$CN/" || true
+          printf "\n" | ../../development/tools/make_key bluetooth "/CN=$CN/" || true
+          openssl genrsa 4096 | openssl pkcs8 -topk8 -scrypt -out avb.pem -passout pass:""
+          expect ../../../expect/passphrase-prompts.exp ../../external/avb/avbtool.py extract_public_key --key avb.pem --output avb_pkmd.bin
+          ssh-keygen -t ed25519 -f id_ed25519 -N ""
+          popd
+          popd
 
-    - name: Encrypt keys
-      run: |
-        pushd rom/
-        expect ../expect/passphrase-prompts.exp ./script/encrypt_keys.sh ./keys/husky
-        popd
+      - name: Encrypt keys
+        run: |
+          pushd rom/
+          expect ../expect/passphrase-prompts.exp ./script/encrypt_keys.sh ./keys/husky
+          popd
 
-    - name: Build OTA tools package
-      run: |
-        pushd rom/
-        m otatools-package
-        popd
+      - name: Build OTA tools package
+        run: |
+          pushd rom/
+          m otatools-package
+          popd
 
-    - name: Release build
-      run: |
-        pushd rom/
-        expect ../expect/passphrase-prompts.exp script/release.sh husky
-        popd
+      - name: Release build
+        run: |
+          pushd rom/
+          expect ../expect/passphrase-prompts.exp script/release.sh husky
+          popd
 
-    - name: Output results
-      run: ls rom/out/release-*/*ota_update*.zip
+      - name: Output results
+        run: ls rom/out/release-*/*ota_update*.zip
