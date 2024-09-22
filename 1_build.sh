@@ -35,7 +35,7 @@ else
 fi
 
 ### CLEANUP PREVIOUS BUILDS
-rm -rf device_tmp/ kernel/ kernel_out/ rom/
+rm -rf device_tmp/ kernel_out/ rom/ kernel/
 
 ### FUNCTIONS
 
@@ -215,6 +215,11 @@ pushd rom/
   # copy kernel sources
   cp -Rfv ../kernel_out/* "device/google/${ROM_TARGET_GROUP}-kernel/"
   rm -rf ../kernel_out
+
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+  export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  nvm install 18
+  nvm use 18
 
   # fetch vendor binaries
   yarnpkg install --cwd vendor/adevtool/
